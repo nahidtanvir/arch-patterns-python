@@ -11,9 +11,11 @@ from allocation.adapters import repository
 
 
 class AbstractUnitOfWork(abc.ABC):
-    # should this class contain __enter__ and __exit__?
-    # or should the context manager and the UoW be separate?
-    # up to you!
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.rollback()
 
     @abc.abstractmethod
     def commit(self):
@@ -31,8 +33,24 @@ DEFAULT_SESSION_FACTORY = sessionmaker(
 )
 
 
-class SqlAlchemyUnitOfWork:
-    ...
+class SqlAlchemyUnitOfWork(AbstractUnitOfWork):
+    def __init__(self, session_factory=DEFAULT_SESSION_FACTORY):
+        self.session_factory = session_factory
+
+    def __enter__(self):
+        self.session: Session = self.session_factory()
+        self.batches = repository.SqlAlchemyRepository(self.session)
+        return super().__enter__()
+
+    def __exit__(self, *args):
+        super().__exit__(*args)
+        self.session.close()
+
+    def commit(self):
+        self.session.commit()
+
+    def rollback(self):
+        self.session.rollback()
 
 
 # One alternative would be to define a `start_uow` function,
